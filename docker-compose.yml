@@ -1,0 +1,25 @@
+version: '3'
+services:
+  backend:
+    build: .
+    volumes:
+      - .dockervenv:/src/.venv
+      - .:/src
+    ports:
+      - 8000:8000
+    environment:
+      - WATCHFILES_FORCE_POLLING=true
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: 'you' # rootアカウントをパスワードなしで作成
+      MYSQL_DATABASE: 'merchandise' 
+      TZ: 'Asia/Tokyo'  # タイムゾーンを日本時間に設定
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password  # MySQL8.0ではデフォルトが"caching_sha2_password"で、ドライバが非対応のため変更
+    ports:
+      - 33306:3306  # ホストマシンのポート33306を、docker内のポート3306に接続する
+volumes:
+  mysql_data:
