@@ -1,22 +1,52 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+import jwt
+from jwt import PyJWTError as JWTError
+import datetime
+from pydantic import BaseModel
 
 app = FastAPI()
 
-# ここに各種エンドポイントを追加します。
-@app.get("/hello")
-async def hello():
-    return {"message": "Hello World"}
+SECRET_KEY = "your_secret_key"
+ALGORITHM = "HS256"
 
-from sqlalchemy import Column, Integer, String, Float
-from database import Base
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
-class Product(Base):
-    __tablename__ = "products"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    price = Column(Float)
-    description = Column(String, index=True)
-    # 他のフィールドも追加...
+# 支払い詳細モデルの例
+class PaymentDetails(BaseModel):
+    card_number: str
+    expiration_date: datetime.date
+    cvv: str
+
+# ユーザーモデルの例
+class User(BaseModel):
+    username: str
+    email: str
+    full_name: str
+    disabled: bool = False
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# 現在のユーザーを取得する関数
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        return User(username=username)
+    except JWTError:
+        raise credentials_exception
+
 
 @app.get("/products/")
 async def read_products(skip: int = 0, limit: int = 10):
@@ -29,15 +59,21 @@ async def read_product(product_id: int):
     return product
 
 
-from fastapi.security import OAuth2PasswordBearer
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-@app.post("/token")
-async def login(form_data: OAuthForm):
-    # ユーザー認証を行い、JWT トークンを生成して返す
-    return {"access_token": token, "token_type": "bearer"}
 
+@app.post("/token")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    # ユーザー認証を行う
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/cart/")
 async def add_to_cart(product_id: int, quantity: int, user: User = Depends(get_current_user)):

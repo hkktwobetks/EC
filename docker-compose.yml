@@ -14,7 +14,7 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: 'you' # rootアカウントをパスワードなしで作成
-      MYSQL_DATABASE: 'merchandise' 
+      MYSQL_DATABASE: 'product' 
       TZ: 'Asia/Tokyo'  # タイムゾーンを日本時間に設定
     volumes:
       - mysql_data:/var/lib/mysql
